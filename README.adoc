@@ -1,0 +1,345 @@
+= FPGA Adventures with RISC-V
+Curt Brune <curt@brune.net>
+
+This represents my wanderings with FPGAs, open source tooling, RISC-V,
+compilers, and embedded software.
+
+Wish me luck.
+
+== Hardware
+
+I'm using a ULXS3 with the Latice ECP5 85F FPGA
+https://www.crowdsupply.com/radiona/ulx3s
+
+== Leveraging Projects
+
+There is a crap ton of tooling and software to install.
+
+The gateway to the universe is the awesome
+https://github.com/litex-hub/linux-on-litex-vexriscv[linux-on-litex-vexriscv]
+project.  Read that first.
+
+The install and build instructions for most projects are great, but
+I've found it often necessary to build from the master branch of the
+various tools for things to work.  YMMV.
+
+I'm not going to document how to download, build, and install the
+various tools.  At the end of the day I source a shell fragment to set
+some environment variables... It feels like the '80s.
+
+After building and installing everything all I do is source
+`fpga-dev.sh` to set up the environment.
+
+Things I need:
+
+- https://github.com/litex-hub/linux-on-litex-vexriscv
+- https://github.com/YosysHQ/yosys
+- https://github.com/YosysHQ/nextpnr
+- https://github.com/YosysHQ/prjtrellis
+- https://github.com/SpinalHDL/SpinalHDL
+- https://github.com/SpinalHDL/VexRiscv
+- http://git.veripool.org/git/verilator
+
+I installed everything under a directory pointed to by
+`$FPGA_TOOLS_DIR`.  Then you can just add `${FPGA_TOOLS_DIR}/bin` to
+your `$PATH`.
+
+=== Verilator
+
+I installed the `stable` tag, with this git ref:
+```
+commit 141c5da3f9f41b17b7f984a50abe244785b823bd
+Merge: 0185ee5df335 935032366fac
+Author: Wilson Snyder <wsnyder@wsnyder.org>
+Date:   Sun Dec 5 11:15:32 2021 -0500
+
+    Merge from master for release.
+```
+
+=== yosys
+
+```
+$ make config-gcc
+$ make -j$(nproc)
+$ PREFIX=$FPGA_TOOLS_DIR make install
+```
+
+=== iverilog
+
+For giggles I install this also as `make test` for yosys required it.
+It follows the usual `autoconf`, `configure`, `make`, `make install`
+pattern.
+
+=== prjtrellis
+
+Needed by `nextpnr`, covered in the next section.
+
+```
+$ cmake -DCMAKE_INSTALL_PREFIX=$FPGA_TOOLS_DIR .
+$ make -j$(nproc)
+$ make install
+```
+
+=== nextpnr
+
+The ULX3S has a `ecp5` part on it, so include that architecture when
+building.
+
+```
+$ cmake -DARCH=ecp5 -DTRELLIS_INSTALL_PREFIX=$FPGA_TOOLS_DIR -DCMAKE_INSTALL_PREFIX=$FPGA_TOOLS_DIR .
+$ make -j$(nproc)
+$ make install
+```
+
+=== sbt -- Scala Build Tool
+
+Need this to generate the RISC-V verilog from the VexRiscv project, so
+installed it.
+
+== Run the simulation with linux-on-litex-vexriscv
+```
+$ cd linux-on-litex-vexriscv
+$ ./sim.py
+```
+
+Be patient.  The simulation is a bit slow and it takes a while
+(several minutes) to boot all the way to the Linux prompt.
+Decompressing the initramfs takes awhile.
+
+Opened issue
+https://github.com/litex-hub/linux-on-litex-vexriscv/issues/258 as the
+sim was hanging.  It only seems to hang as the early console was not
+working with the
+https://github.com/litex-hub/linux-on-litex-vexriscv/issues/164[older
+pre-built Linux images].
+
+That led me to make a couple PRs to make the simulation use the SBI
+method for the earlyconsole:
+
+- https://github.com/enjoy-digital/litex/pull/1145
+- https://github.com/litex-hub/linux-on-litex-vexriscv/pull/260
+
+But those ideas were bandaids, not addressing the real problem.
+Ultimately I closed those PRs in favor of investigating why early
+console was not working.
+
+In the end it turned out the pre-built kernel images were out of date.
+Following the
+https://github.com/litex-hub/linux-on-litex-vexriscv#generating-the-linux-binaries-optional[Litex
+buildroot instructions] it was straightforward to build a more recent
+Linux kernel.  With that the simulation early console worked fine.
+
+== Building the bitream for the ULXS3 with linux-on-litex-vexriscv
+
+```
+$ ./make.py --board=ulx3s --device=LFE5U-85F --cpu-count=1 --build
+```
+
+Note: The tool will not meet timing with `--cpu-count=2`.  With
+`--cpu-count=1` the timing results are:
+
+```
+Info: Max frequency for clock '$glbnet$main_ecp5pll0_clkout0': 50.71 MHz (PASS at 50.00 MHz)
+Info: Max frequency for clock              '$glbnet$hdmi_clk': 116.09 MHz (PASS at 25.00 MHz)
+Info: Max frequency for clock            '$glbnet$hdmi5x_clk': 137.32 MHz (PASS at 125.00 MHz)
+```
+
+While with `--cpu-count=2` the timing results are:
+```
+Warning: Max frequency for clock '$glbnet$main_ecp5pll0_clkout0': 48.92 MHz (FAIL at 50.00 MHz)
+Info: Max frequency for clock              '$glbnet$hdmi_clk': 132.73 MHz (PASS at 25.00 MHz)
+Warning: Max frequency for clock            '$glbnet$hdmi5x_clk': 105.88 MHz (FAIL at 125.00 MHz)
+```
+
+== Load the FPGA bitream for the ULXS3 with linux-on-litex-vexriscv
+
+```
+$ ./make.py --board=ulx3s --device=LFE5U-85F --cpu-count=1 --load
+```
+
+`make.py` was looking for `ujprog` to load the bitstream, but it seems
+`fujprog` has superceeded this program.  The command line options look
+more or less the same so I symlinked `ujprog` to `fujprog`.  Seems to
+work.
+
+== Load the Linux image and rootfs
+
+```
+$ lxterm --images=images/boot.json --speed 1e6 /dev/ttyUSB0
+```
+
+The board had quickly booted to the Litex boot loader.  In order to
+kick the loading over serial into action need to press `[ENTER]` and
+get to the boot loader prompt and run `reboot`:
+
+```
+[ENTER]
+litex>
+litex> reboot
+
+        __   _ __      _  __
+       / /  (_) /____ | |/_/
+      / /__/ / __/ -_)>  <
+     /____/_/\__/\__/_/|_|
+   Build your hardware, easily!
+
+ (c) Copyright 2012-2021 Enjoy-Digital
+ (c) Copyright 2007-2015 M-Labs
+
+ BIOS built on Dec 28 2021 11:21:24
+ BIOS CRC passed (ea9520aa)
+
+ Migen git sha1: ac703010eaa0
+ LiteX git sha1: 2763c195e5e4
+```
+
+== Using picocom
+
+I have used picocom for years.  I like it for the reason described in
+the https://linux.die.net/man/8/picocom[man page], `minimal
+dumb-terminal emulation program`.
+
+```
+$ picocom --baud 1000000 /dev/ttyUSB0
+```
+
+== Where is the Litex bootloader source ?
+
+As an old u-boot guy I have a morbid curiousity about boot loaders.
+The Litex project contains a little boot loader, called the `bios`.
+The source for the boot loader is
+https://github.com/enjoy-digital/litex/tree/master/litex/soc/software/bios[here].
+
+== Issues with SDCARD
+
+https://github.com/litex-hub/linux-on-litex-vexriscv/issues/203
+
+The board has no "card detect (CD)" pin, so the base mmc Linux driver
+goes in circles.  Slows everything down.
+
+No fun.
+
+=== Trying spisdcard support instead
+
+Change `sdcard` to `spisdcard` in `make.py` for the ULX3S.  It
+definitely changes the .dts file to reflect the spisdcard support.
+
+With that change it works alright:
+```
+[   21.737224] Run /init as init process
+[   21.752484] mmc0: error -110 whilst initialising SD card
+[   23.042254] mmc0: error -110 whilst initialising SD card
+[   24.518415] mmc0: host does not support reading read-only switch, assuming write-enable
+[   24.526535] mmc0: new SDHC card on SPI
+[   24.673222] mmcblk0: mmc0:0000 EB1QT 29.8 GiB
+[   25.150765]  mmcblk0: p1
+
+root@buildroot:~# mkdir /mnt/sd
+root@buildroot:~# mount /dev/mmcblk0p1 /mnt/sd
+```
+
+Made a
+https://github.com/litex-hub/linux-on-litex-vexriscv/issues/258[PR for
+this change].
+
+=== Something with the SDCard is flaky....
+
+Sometimes the SDcard would not work.  I found if I disabled
+framebuffer support, the SoC was simpler, met all timing without
+warnings, and the sdcard worked reliably.
+
+Since I'm not planning to use a framebuffer, seems OK to leave that
+disabled for now.
+
+With framebuffer support enabled, the mmc driver is flaky.
+```
+Info: Max frequency for clock '$glbnet$main_ecp5pll0_clkout0': 51.16 MHz (PASS at 50.00 MHz)
+Info: Max frequency for clock              '$glbnet$hdmi_clk': 129.37 MHz (PASS at 25.00 MHz)
+Warning: Max frequency for clock            '$glbnet$hdmi5x_clk': 98.15 MHz (FAIL at 125.00 MHz)
+```
+
+With framebuffer disabled, mmc works OK.  Also no warnings.
+```
+Info: Max frequency for clock '$glbnet$main_crg_clkout0': 51.29 MHz (PASS at 50.00 MHz)
+```
+
+== How Does VecRiscv fit in with linux-on-litex-vexriscv
+
+I was curious how `make.py` selected the verilog bit stream from the
+https://github.com/litex-hub/pythondata-cpu-vexriscv_smp[pythondata-cpu-vexriscv-smp]
+project.  Based on the various options for core (bus widths, cache
+sizes, number of cores, etc...) the program uses the `VexRiscv`
+project to generate the verilog for the configuration.
+
+The project maintains a specific branch of `VexRiscv` as a git
+sub-module located in
+`pythondata-cpu-vexriscv-smp/pythondata_cpu_vexriscv_smp/verilog/ext/VexRiscv`.
+
+The simple `make.py` invocation I use above turns into the following,
+within the VexRiscv project directory:
+
+```shell
+$ ARGS="
+--cpu-count=1
+--ibus-width=32
+--dbus-width=32
+--dcache-size=4096
+--icache-size=4096
+--dcache-ways=1
+--icache-ways=1
+--litedram-width=16
+--aes-instruction=False
+--out-of-order-decoder=True
+--wishbone-memory=True
+--fpu=False
+--cpu-per-fpu=4
+--rvc=False
+--netlist-name=VexRiscvLitexSmpCluster_Cc1_Iw32Is4096Iy1_Dw32Ds4096Dy1_ITs4DTs4_Ood_Wm
+--netlist-directory=$OUTPUT_DIR
+--dtlb-size=4
+--itlb-size=4
+"
+
+$ sbt "runMain vexriscv.demo.smp.VexRiscvLitexSmpClusterCmdGen $ARGS"
+```
+
+=== cleaning with sbt
+
+Having never used `sbt` before, I need to learn the equivalent of `make clean`:
+
+```
+$ sbt clean reload
+```
+
+== Util
+
+Every software project seems to have a directory or file called
+`util`, a place to put some odds and ends.  As long as this does not
+become too large, this is fine.
+
+=== Device Tree Overlays
+
+I wanted to fiddle with the sdcard clock frequencies at run time,
+which led me to wanting Device Tree Overlays.  For a quick overview
+check out https://www.digi.com/resources/examples-guides/use-device-tree-overlays-to-patch-your-device-tree[this article].
+
+=== How to Change the Core SoC Clock Frequency
+
+Some other issues mentioned changing the SoC clock frequency, so I
+wanted to try that out.  A minor change in `make.py` for ULX3S is all
+it takes -- Set `sys_clk_freq` in the `soc_kwargs` variable for the
+ULX3S.
+
+See also https://github.com/litex-hub/litex-boards/blob/master/litex_boards/targets/radiona_ulx3s.py[litex-boards/litex_boards/targets/radiona_ulx3s.py].
+
+```diff
+modified   make.py
+@@ -340,7 +340,7 @@ class VersaECP5(Board):
+ # ULX3S support ------------------------------------------------------------------------------------
+ 
+ class ULX3S(Board):
+-    soc_kwargs = {"l2_size" : 2048} # Use Wishbone and L2 for memory accesses.
++    soc_kwargs = {"l2_size" : 2048, "sys_clk_freq": int(25e6)} # Use Wishbone and L2 for memory accesses.
+     def __init__(self):
+         from litex_boards.targets import ulx3s
+```
