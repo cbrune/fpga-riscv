@@ -1,0 +1,6 @@
+[submodule "SpinalHDL"]
+	path = SpinalHDL
+	url = git@github.com:cbrune/SpinalHDL.git
+[submodule "VexRiscv"]
+	path = VexRiscv
+	url = git@github.com:cbrune/VexRiscv.git
