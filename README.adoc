@@ -44,58 +44,6 @@ I installed everything under a directory pointed to by
 `$FPGA_TOOLS_DIR`.  Then you can just add `${FPGA_TOOLS_DIR}/bin` to
 your `$PATH`.
 
-=== Verilator
-
-I installed the `stable` tag, with this git ref:
-```
-commit 141c5da3f9f41b17b7f984a50abe244785b823bd
-Merge: 0185ee5df335 935032366fac
-Author: Wilson Snyder <wsnyder@wsnyder.org>
-Date:   Sun Dec 5 11:15:32 2021 -0500
-
-    Merge from master for release.
-```
-
-=== yosys
-
-```
-$ make config-gcc
-$ make -j$(nproc)
-$ PREFIX=$FPGA_TOOLS_DIR make install
-```
-
-=== iverilog
-
-For giggles I install this also as `make test` for yosys required it.
-It follows the usual `autoconf`, `configure`, `make`, `make install`
-pattern.
-
-=== prjtrellis
-
-Needed by `nextpnr`, covered in the next section.
-
-```
-$ cmake -DCMAKE_INSTALL_PREFIX=$FPGA_TOOLS_DIR .
-$ make -j$(nproc)
-$ make install
-```
-
-=== nextpnr
-
-The ULX3S has a `ecp5` part on it, so include that architecture when
-building.
-
-```
-$ cmake -DARCH=ecp5 -DTRELLIS_INSTALL_PREFIX=$FPGA_TOOLS_DIR -DCMAKE_INSTALL_PREFIX=$FPGA_TOOLS_DIR .
-$ make -j$(nproc)
-$ make install
-```
-
-=== sbt -- Scala Build Tool
-
-Need this to generate the RISC-V verilog from the VexRiscv project, so
-installed it.
-
 == Run the simulation with linux-on-litex-vexriscv
 ```
 $ cd linux-on-litex-vexriscv
@@ -343,3 +291,72 @@ modified   make.py
      def __init__(self):
          from litex_boards.targets import ulx3s
 ```
+
+== Tooling
+
+This section is a collection of notes about installing the required
+software tools.
+
+=== Verilator
+
+Verilator is a Verilog/SystemVerilog simulator.
+
+I installed the `stable` tag, with this git ref:
+```
+commit 141c5da3f9f41b17b7f984a50abe244785b823bd
+Merge: 0185ee5df335 935032366fac
+Author: Wilson Snyder <wsnyder@wsnyder.org>
+Date:   Sun Dec 5 11:15:32 2021 -0500
+
+    Merge from master for release.
+```
+
+=== yosys
+
+yosys is an open sysnthesis suite and framework for RTL synthesis
+tools.
+
+```
+$ make config-gcc
+$ make -j$(nproc)
+$ PREFIX=$FPGA_TOOLS_DIR make install
+```
+
+=== iverilog
+
+iverilog (Icarus Verilog) is a Verilog simulation and synthesis tool.
+
+For giggles I install this also as `make test` for yosys required it.
+It follows the usual `autoconf`, `configure`, `make`, `make install`
+pattern.
+
+=== prjtrellis
+
+Project Trellis enables a fully open-source flow for ECP5 FPGAs using
+Yosys for Verilog synthesis and nextpnr for place and route.
+
+
+```
+$ cmake -DCMAKE_INSTALL_PREFIX=$FPGA_TOOLS_DIR .
+$ make -j$(nproc)
+$ make install
+```
+
+=== nextpnr
+
+nextpnr aims to be a vendor neutral, timing driven, FOSS FPGA place
+and route tool.
+
+The ULX3S has a `ecp5` part on it, so include that architecture when
+building.
+
+```
+$ cmake -DARCH=ecp5 -DTRELLIS_INSTALL_PREFIX=$FPGA_TOOLS_DIR -DCMAKE_INSTALL_PREFIX=$FPGA_TOOLS_DIR .
+$ make -j$(nproc)
+$ make install
+```
+
+=== sbt -- Scala Build Tool
+
+Need this to generate the RISC-V verilog from the VexRiscv project, so
+installed it.
