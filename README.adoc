@@ -292,6 +292,11 @@ modified   make.py
          from litex_boards.targets import ulx3s
 ```
 
+=== How to Use GDB with Litex
+
+Maybe helpful:
+https://github.com/enjoy-digital/litex/wiki/Use-Host-Bridge-to-control-debug-a-SoC
+
 == Tooling
 
 This section is a collection of notes about installing the required
@@ -360,3 +365,41 @@ $ make install
 
 Need this to generate the RISC-V verilog from the VexRiscv project, so
 installed it.
+
+== Setting ESP32 Wifi JTAG Loader
+
+Following along here:
+https://github.com/emard/esp32ecp5
+
+=== Install passthru
+
+```
+$ fujprog -j flash ~/Downloads/ulx3s_85f_passthru.bit
+```
+
+=== Install micropython
+
+```
+$ esptool.py --chip esp32 --port /dev/ttyUSB0 erase_flash
+$ esptool.py --chip esp32 --port /dev/ttyUSB0 --baud 460800 write_flash -z 0x1000 ~/Downloads/esp32-idf3-20210202-v1.14.bin
+```
+
+=== ESP no longer working
+
+It was working for a while.  Went all the way through installing and
+running micropython on the esp32.  The webrpl and serial console
+micropython repl were working fine.
+
+Trying to use the micropython to program the lattice 85f failed.  The
+bistream would upload, but programming failed.  I pulled the plug and
+started over.
+
+After that, not sure what went wrong, but the esptool.py can no longer
+connect to the esp32.  I tried restarting with the passthru bitstream
+(which programs OK), but esptool.py was never again happy.
+
+== VexRiscv GDB/openocd
+
+=== Run VexRiscv Debug Example
+
+=== Enable VexRiscv debug plugin
