@@ -1,0 +1,54 @@
+#!/bin/sh
+
+set -e
+
+# Boot strap upload of micro python files for ESP32ECP5:
+
+LIB_FILES="
+ecp5.py
+ecp5setup.py
+ecp5wp.py
+sdraw.py
+uftpd.py
+wifiman.py
+"
+
+ROOT_FILES="
+jtagpin.py
+sdpin.py
+main.py
+"
+
+serial_method() {
+    TTY=$1
+    ampy -p $TTY rmdir /lib || true
+    ampy -p $TTY mkdir /lib
+
+    for f in $LIB_FILES ; do
+        echo "Putting: /lib/$f"
+        ampy -p $TTY put $f /lib/$f
+    done
+
+    for f in $ROOT_FILES ; do
+        echo "Putting: /$f"
+        ampy -p $TTY put $f /$f
+    done
+}
+
+webrepl_method() {
+    PASS=$1
+
+    for f in $ROOT_FILES $LIB_FILES ; do
+        echo "Putting: $f"
+        webreplcmd --host ulx3s-wifi -p $PASS put $f $f
+    done
+}
+
+# webrepl_method $1
+serial_method $1
+
+# Run setup on the upython CLI
+# >>> import ecp5setup
+
+# Setup webrepl at boot
+# >>> import webrepl_setup

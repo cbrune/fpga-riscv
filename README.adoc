@@ -381,7 +381,7 @@ $ fujprog -j flash ~/Downloads/ulx3s_85f_passthru.bit
 
 ```
 $ esptool.py --chip esp32 --port /dev/ttyUSB0 erase_flash
-$ esptool.py --chip esp32 --port /dev/ttyUSB0 --baud 460800 write_flash -z 0x1000 ~/Downloads/esp32-idf3-20210202-v1.14.bin
+$ esptool.py --chip esp32 --port /dev/ttyUSB0 --baud 460800 write_flash -z 0x1000 ~/Downloads/esp32spiram-idf3-20210202-v1.14.bin
 ```
 
 === ESP no longer working
@@ -397,6 +397,75 @@ started over.
 After that, not sure what went wrong, but the esptool.py can no longer
 connect to the esp32.  I tried restarting with the passthru bitstream
 (which programs OK), but esptool.py was never again happy.
+
+=== Slept on It
+
+Once the ESP32 is programmed with micro-python, it is tricky to get it
+into a state where I can re-program it.  Once programed, the esptool
+no longer detects the chip.
+
+Tried a few things to no avail:
+- power cycling
+- reflashing the passthrough FPGA bitstream
+
+Tried `esptool.py ... erase_flash` again with the ESP32 serial console
+connected.  Saw garbage characters.  Some kind of mode setting is not
+right...
+
+Power cycling after that -- the upython repl is gone... So something
+happened. Still can't run flash erase though...
+
+Read a detail about connecting TMS to GND (turns on blue LED) while
+trying esptool.py...  Tried that, but flash erase still fails.
+
+Power cycling after that with jumper still in place -- nothing.
+
+Remove TMS-GND jumper.  Nothing.
+
+Power cycle.  Works!
+
+What seems to work reliably:
+
+- insert TMS-GND jumper
+- power cycle
+- flash erase
+- flash micropython
+- remove jumper
+- power cylce
+- boot strap webrepl
+
+=== Found missing detail - have v3.1.7 of ULX3S board
+
+The part is a ESP32-WROVER-E
+https://www.digikey.com/en/products/detail/espressif-systems/ESP32-WROVER-E-8MB/11613126
+
+Chip is ESP32-D0WD-V3 (revision 3)
+Features: WiFi, BT, Dual Core, 240MHz, VRef calibration in efuse, Coding Scheme None
+Crystal is 40MHz
+
+=== ESP32 starts working
+
+Using micro-python version esp32spiram-idf3-20210202-v1.14.bin does
+the trick.  Programming the FPGA via the ESP32 is now working.  Yeah.
+
+=== Bootstrap upython
+
+Wrote a little script to upload the esp32epc5 upython files once the
+thing is working.
+
+=== Flashing FPGA bitstream Trashes ESP32 Micropython
+
+The ESP32 and FPGA share the same SPI-Flash.  As such only use the
+ESP32 micropython environment to program the FPGA's SRAM to testing
+out bitstreams.  Once you flash the FPGA bitstream the micropython data is gone.
+
+In practice this means only using micropython commands like:
+```
+>>> import ecp5
+>>> ecp5.prog("fpga-image.bit")
+```
+
+Using the `ecp5.flash(...)` command will bonk out the ESP32 Micropython.
 
 == VexRiscv GDB/openocd
 
